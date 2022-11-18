@@ -1,0 +1,46 @@
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+permissions: read-all
+
+name: Cross No Cache
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+        include:
+          - os: macos-latest
+            COSIGN_TARGET: cosign-darwin-amd64
+            SGET_TARGET: sget-darwin-amd64
+            COSIGN_PASSWORD: COSIGN_PASSWORD
+          - os: ubuntu-latest
+            COSIGN_TARGET: cosign-linux-amd64
+            SGET_TARGET: sget-linux-amd64
+            COSIGN_PASSWORD: COSIGN_PASSWORD
+          - os: windows-latest
+            COSIGN_TARGET: cosign-windows-amd64.exe
+            SGET_TARGET: sget-windows-amd64.exe
+            COSIGN_PASSWORD: COSIGN_PASSWORD
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@c4a742cab115ed795e34d4513e2cf7d472deb55f # v3.3.1
+        with:
+          go-version: '1.19'
+          check-latest: true
+      - name: Checkout code
+        uses: actions/checkout@93ea575cb5d8a053eaa0ac8fa3b40d7e05a33cc8 # v3.1.0
+      - name: build cosign
+        run: |
+          make cosign && mv ./cosign ./${{matrix.COSIGN_TARGET}}
+          make sget && mv ./sget ./${{matrix.SGET_TARGET}}
+      - name: Create checksum file
+        shell: pwsh
+        run: |
+          $hash=Get-FileHash -Path ./${{matrix.COSIGN_TARGET}}
+          Write-Output $($hash.Hash + " " + $(([io.fileinfo]$hash.path).basename)) | Tee-Object -Path ${{matrix.COSIGN_TARGET}}.sha256
+          $hash=Get-FileHash -Path ./${{matrix.SGET_TARGET}}
+          Write-Output $($hash.Hash + " " + $(([io.fileinfo]$hash.path).basename)) | Tee-Object -Path ${{matrix.SGET_TARGET}}.sha256
